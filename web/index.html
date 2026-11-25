@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ikigai Sales</title>
+<meta name="description" content="Ikigai Sales ระบบติดตามลูกค้าและยอดขายของทีมเซลล์">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.2/papaparse.min.js"></script>
+<style>
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --line:#dde3e0; --fg:#18231f; --muted:#5f6d68;
+  --accent:#1f6f5c; --accent-soft:#e2f0eb; --warm:#c7791f; --warm-soft:#fbefdf;
+  --good:#2f8a4e; --bad:#b4423a; --info:#2d64a8; --violet:#7a67c4; --pink:#c4508a;
+  --font:"IBM Plex Sans Thai",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111816; --surface:#18211e; --line:#2a3632; --fg:#e6eeea; --muted:#9aaaa4;
+  --accent:#4fb89b; --accent-soft:#1d3a32; --warm:#e3a04f; --warm-soft:#3a2c1a;
+  --good:#5cc27e; --bad:#e2766d; --info:#74a6e6; --violet:#a594e6; --pink:#e07fb0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111816; --surface:#18211e; --line:#2a3632; --fg:#e6eeea; --muted:#9aaaa4;
+  --accent:#4fb89b; --accent-soft:#1d3a32; --warm:#e3a04f; --warm-soft:#3a2c1a;
+  --good:#5cc27e; --bad:#e2766d; --info:#74a6e6; --violet:#a594e6; --pink:#e07fb0; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.55}
+button,input,select,textarea{font:inherit;color:inherit}
+[hidden]{display:none!important}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100%}
+nav.rail{background:var(--surface);border-right:1px solid var(--line);padding:20px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+.brand{font-weight:700;font-size:17px;padding:0 10px 16px;display:flex;align-items:center;gap:8px}
+.brand i{width:26px;height:26px;border-radius:7px;background:var(--accent);display:inline-block;position:relative}
+.brand i::after{content:"";position:absolute;inset:7px;border:2px solid var(--surface);border-radius:50%}
+nav.rail a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:500}
+nav.rail a:hover{background:var(--bg);color:var(--fg)}
+nav.rail a.on{background:var(--accent-soft);color:var(--accent)}
+nav.rail a .n{margin-left:auto;font-family:var(--mono);font-size:11px;background:var(--warm-soft);color:var(--warm);padding:1px 7px;border-radius:20px}
+.me{margin-top:auto;font-size:12px;color:var(--muted);padding:10px;border-top:1px solid var(--line);display:grid;gap:6px}
+.me b{color:var(--fg);font-weight:600}
+main{padding-block:24px 40px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));min-width:0}
+header.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+header.top h1{font-size:22px;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px}
+.sp{flex:1}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500;text-decoration:none;display:inline-block}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn:disabled{opacity:.6;cursor:default}
+.btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.panel h2{font-size:14px;margin:0 0 12px;font-weight:600}
+.stack{display:grid;gap:16px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kpi .l{color:var(--muted);font-size:12px}
+.kpi .v{font-family:var(--mono);font-size:24px;font-variant-numeric:tabular-nums;margin-top:2px}
+.kpi .d{font-size:12px;margin-top:2px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px}
+.bar-legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap}
+.bar-legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+svg text{fill:var(--muted);font-family:var(--font);font-size:11px}
+.funnel .row{display:grid;grid-template-columns:100px 1fr 80px;gap:8px;align-items:center;margin-bottom:8px;font-size:13px}
+.funnel .track{height:18px;background:var(--bg);border-radius:4px;overflow:hidden}
+.funnel .fill{height:100%;border-radius:4px}
+.funnel .amt{text-align:right;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:500}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--bg)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.tbl-wrap{overflow-x:auto}
+.pill{display:inline-block;font-size:12px;padding:1px 9px;border-radius:20px;white-space:nowrap;font-weight:500;background:color-mix(in srgb,var(--c) 15%,transparent);color:var(--c)}
+.who{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.av{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:11px;color:#fff;background:var(--c);font-weight:600}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters input,.filters select{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 10px}
+.filters input{flex:1;min-width:180px}
+.board{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px}
+.col{background:color-mix(in srgb,var(--line) 35%,var(--bg));border-radius:var(--r);padding:10px;min-height:300px}
+.col.over{outline:2px dashed var(--accent)}
+.col h3{font-size:13px;margin:0 0 4px;display:flex;align-items:center;gap:6px}
+.col h3::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+.col .sum{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;cursor:grab}
+.card:hover{border-color:var(--accent)}
+.card .t{font-weight:600;font-size:13px}
+.card .m{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--muted);gap:6px}
+.card .val{font-family:var(--mono);color:var(--fg)}
+.card .due{font-size:11px;color:var(--warm);margin-top:4px}
+.mapwrap{display:grid;grid-template-columns:1fr 300px;gap:16px}
+#leaf{height:min(70vh,600px);border-radius:var(--r);border:1px solid var(--line);z-index:0}
+.task{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+.task:last-child{border-bottom:0}
+.task input{margin-top:4px;width:18px;height:18px;accent-color:var(--accent);flex:none}
+.task.done .tt{text-decoration:line-through;color:var(--muted)}
+.task .tt{font-weight:500}
+.task .tm{font-size:12px;color:var(--muted)}
+.task .when{margin-left:auto;font-size:12px;white-space:nowrap}
+.late{color:var(--bad);font-weight:600}
+.today{color:var(--warm);font-weight:600}
+.drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--surface);z-index:1001;overflow-y:auto;padding:22px;padding-top:calc(22px + env(safe-area-inset-top,0px));padding-right:max(22px,env(safe-area-inset-right,0px));padding-bottom:calc(22px + env(safe-area-inset-bottom,0px));border-left:1px solid var(--line)}
+.drawer h2{margin:0;font-size:20px;overflow-wrap:anywhere}
+.drawer h3{font-size:14px;margin:20px 0 8px}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;margin:16px 0;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.timeline{border-left:2px solid var(--line);margin-left:6px;padding-left:16px}
+.timeline .ev{position:relative;margin-bottom:14px;font-size:13px;white-space:pre-wrap}
+.timeline .ev::before{content:"";position:absolute;left:-22px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--accent)}
+.timeline .ev small{color:var(--muted);display:block}
+.form{display:grid;gap:10px}
+.form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.form input,.form select,.form textarea,select.inp{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;font-size:14px;min-width:0;width:100%}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.toast{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;z-index:2000;font-size:13px;max-width:calc(100% - 32px)}
+.toast.err{background:var(--bad);color:#fff}
+.copy{border:0;background:none;color:var(--accent);cursor:pointer;padding:0 4px;font-size:12px}
+.link{color:var(--accent)}
+.empty{color:var(--muted);padding:12px 0}
+/* login */
+.login{min-height:100%;display:grid;place-items:center;padding:24px 16px}
+.login .panel{width:min(380px,100%);padding:28px}
+.login h1{font-size:22px;margin:0 0 4px;display:flex;gap:10px;align-items:center}
+.login .brand{padding:0}
+.chk{display:flex!important;grid-template-columns:none;align-items:flex-start;gap:8px!important;color:var(--fg)!important;font-size:13px!important}
+.chk input{width:auto;margin-top:3px}
+.err-msg{color:var(--bad);font-size:13px}
+.loading{display:grid;place-items:center;min-height:100%;color:var(--muted)}
+@media (max-width:900px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .grid2,.mapwrap{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .app{grid-template-columns:1fr}
+  nav.rail{position:fixed;top:auto;bottom:0;left:0;right:0;height:auto;flex-direction:row;justify-content:space-around;padding:6px max(6px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left,0px));border-right:0;border-top:1px solid var(--line);z-index:900}
+  nav.rail .brand,nav.rail .me{display:none}
+  nav.rail a{flex-direction:column;gap:0;font-size:11px;padding:6px 4px}
+  nav.rail a .n{display:none}
+  main{padding-bottom:96px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .hide-sm{display:none}
+  .kpi .v{font-size:19px}
+  .row2{grid-template-columns:1fr}
+  .kv{grid-template-columns:90px 1fr}
+  .funnel .row{grid-template-columns:84px 1fr 72px}
+  .board{grid-template-columns:repeat(5,78vw);scroll-snap-type:x mandatory}
+  .col{scroll-snap-align:start;min-height:200px}
+}
+@media (prefers-reduced-motion:no-preference){.card,.btn,nav.rail a{transition:border-color .15s,background .15s}}
+</style>
+</head>
+<body>
+<div id="root"><div class="loading">กำลังโหลด…</div></div>
+<div id="layer"></div>
+
+<script>
+/* ===== ตั้งค่าการเชื่อมต่อ Supabase (โปรเจกต์ ikigai-sales-crm) =====
+   คีย์นี้เป็นคีย์สาธารณะ ใส่ในหน้าเว็บได้ สิทธิ์จริงบังคับที่ฐานข้อมูล (Row Level Security) */
+const SUPABASE_URL = "https://cswkiappkhpnroxhjmlw.supabase.co";
+const SUPABASE_KEY = "sb_publishable_0eEqQR29XmoDUaalEyCPOw_T1Le_mcl";
+
+const REMEMBER_KEY = "ikg_sales_remember";
+const remembered = () => { try { return localStorage.getItem(REMEMBER_KEY) !== "0"; } catch { return true; } };
+// "จดจำฉัน": ติ๊กไว้ = เก็บการล็อกอินถาวรในเครื่อง, ไม่ติ๊ก = หลุดเมื่อปิดเบราว์เซอร์
+const store = {
+  getItem: k => { try { return localStorage.getItem(k) ?? sessionStorage.getItem(k); } catch { return null; } },
+  setItem: (k, v) => { try { (remembered() ? localStorage : sessionStorage).setItem(k, v); (remembered() ? sessionStorage : localStorage).removeItem(k); } catch {} },
+  removeItem: k => { try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch {} },
+};
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storage: store, persistSession: true, autoRefreshToken: true } });
+
+const STAGES = [
+  { k: "lead", n: "ลีดใหม่", c: "var(--info)", p: .1 },
+  { k: "contact", n: "ติดต่อแล้ว", c: "var(--violet)", p: .25 },
+  { k: "quote", n: "เสนอราคา", c: "var(--warm)", p: .5 },
+  { k: "nego", n: "ต่อรอง", c: "var(--pink)", p: .75 },
+  { k: "won", n: "ปิดการขาย", c: "var(--good)", p: 1 },
+  { k: "lost", n: "ไม่สำเร็จ", c: "var(--bad)", p: 0 },
+];
+const OPEN = ["lead", "contact", "quote", "nego"];
+const REP_COLORS = ["#1f6f5c", "#c7791f", "#2d64a8", "#7a67c4", "#c4508a", "#4b8a2f", "#a8552d"];
+const MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+
+const S = { user: null, me: null, team: [], customers: [], tasks: [], targets: [], filt: { q: "", stage: "", owner: "" } };
+
+/* ===== helpers ===== */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+const baht = n => "฿" + Math.round(Number(n || 0)).toLocaleString("th-TH");
+const st = k => STAGES.find(s => s.k === k) || STAGES[0];
+const pill = k => { const s = st(k); return `<span class="pill" style="--c:${s.c}">${s.n}</span>`; };
+const todayISO = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+const thaiDate = iso => iso ? new Date(iso + (iso.length === 10 ? "T00:00:00" : "")).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit", timeZone: "Asia/Bangkok" }) : "";
+const thaiDateTime = iso => new Date(iso).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" });
+const isLead = () => S.me?.role === "lead";
+const person = id => S.team.find(p => p.id === id);
+const repColor = id => { const i = S.team.findIndex(p => p.id === id); return i < 0 ? "var(--muted)" : REP_COLORS[i % REP_COLORS.length]; };
+const rep = id => { const p = person(id); if (!p) return `<span class="sub">-</span>`; const n = p.full_name || "?"; return `<span class="who"><span class="av" style="--c:${repColor(id)}">${esc(n[0])}</span>${esc(n)}</span>`; };
+function due(d) {
+  if (!d) return "";
+  const diff = Math.round((new Date(d + "T00:00:00Z") - new Date(todayISO() + "T00:00:00Z")) / 864e5);
+  if (diff < 0) return `<span class="late">เลยกำหนด ${-diff} วัน</span>`;
+  if (diff === 0) return `<span class="today">วันนี้</span>`;
+  if (diff === 1) return "พรุ่งนี้";
+  return thaiDate(d);
+}
+function toast(m, err) { const t = document.createElement("div"); t.className = "toast" + (err ? " err" : ""); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), err ? 5000 : 2400); }
+function fail(error) { if (error) { console.error(error); toast("ผิดพลาด: " + (error.message || error), true); return true; } return false; }
+const nextTask = cid => S.tasks.filter(t => t.customer_id === cid && !t.done).sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+const cust = id => S.customers.find(c => c.id === id);
+const val = id => { const el = document.getElementById(id); return el ? el.value.trim() : ""; };
+
+/* ===== data ===== */
+async function loadAll() {
+  const [p, c, t, g] = await Promise.all([
+    sb.from("profiles").select("id, full_name, role").order("created_at"),
+    sb.from("customers").select("*").order("updated_at", { ascending: false }),
+    sb.from("tasks").select("*").order("due_date"),
+    sb.from("targets").select("month, amount").order("month", { ascending: false }).limit(24),
+  ]);
+  for (const r of [p, c, t, g]) if (fail(r.error)) break;
+  S.team = p.data || []; S.customers = c.data || []; S.tasks = t.data || []; S.targets = g.data || [];
+  S.me = S.team.find(x => x.id === S.user.id) || { id: S.user.id, full_name: S.user.email, role: "sales" };
+}
+
+/* ===== auth ===== */
+function loginView(msg) {
+  $("#root").innerHTML = `<div class="login"><div class="panel">
+    <h1><span class="brand"><i></i></span>Ikigai Sales</h1>
+    <div class="sub" style="margin-bottom:18px">ระบบติดตามลูกค้าของทีมเซลล์</div>
+    <form class="form" id="lf">
+      <label>อีเมล<input id="l_email" type="email" autocomplete="username" required></label>
+      <label>รหัสผ่าน<input id="l_pass" type="password" autocomplete="current-password" required></label>
+      <label class="chk"><input type="checkbox" id="l_rem" ${remembered() ? "checked" : ""}><span>จดจำฉันไว้ในเครื่องนี้<br><span class="sub">ไม่ควรติ๊กบนเครื่องที่ใช้ร่วมกับคนอื่น</span></span></label>
+      <div class="err-msg" id="l_err">${esc(msg || "")}</div>
+      <button class="btn pri" id="l_btn">เข้าสู่ระบบ</button>
+      <button type="button" class="copy" id="l_forgot" style="justify-self:start">ลืมรหัสผ่าน?</button>
+    </form></div></div>`;
+  try { const e = localStorage.getItem("ikg_sales_email"); if (e) $("#l_email").value = e; } catch {}
+  $("#lf").onsubmit = async e => {
+    e.preventDefault();
+    const rem = $("#l_rem").checked, email = val("l_email");
+    try { localStorage.setItem(REMEMBER_KEY, rem ? "1" : "0"); rem ? localStorage.setItem("ikg_sales_email", email) : localStorage.removeItem("ikg_sales_email"); } catch {}
+    await doLogin(email, $("#l_pass").value);
+  };
+  $("#l_forgot").onclick = async () => {
+    const email = val("l_email");
+    if (!email) { $("#l_err").textContent = "กรอกอีเมลก่อน แล้วกดลืมรหัสผ่านอีกครั้ง"; return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    $("#l_err").textContent = error ? error.message : "ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลแล้ว";
+  };
+}
+async function doLogin(email, pass) {
+  const b = $("#l_btn"); if (b) { b.disabled = true; b.textContent = "กำลังเข้าสู่ระบบ…"; }
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) loginView(error.message === "Invalid login credentials" ? "อีเมลหรือรหัสผ่านไม่ถูกต้อง" : error.message);
+}
+function resetPasswordView() {
+  $("#root").innerHTML = `<div class="login"><div class="panel"><h1>ตั้งรหัสผ่านใหม่</h1>
+    <form class="form" id="rf" style="margin-top:16px"><label>รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)<input id="r_pass" type="password" minlength="6" autocomplete="new-password" required></label>
+    <div class="err-msg" id="r_err"></div><button class="btn pri">บันทึก</button></form></div></div>`;
+  $("#rf").onsubmit = async e => { e.preventDefault(); const { error } = await sb.auth.updateUser({ password: $("#r_pass").value }); if (error) $("#r_err").textContent = error.message; else { toast("ตั้งรหัสผ่านใหม่แล้ว"); history.replaceState(null, "", location.pathname); boot(); } };
+}
+
+/* ===== shell ===== */
+const NAV = [["dashboard", "ภาพรวม"], ["pipeline", "ไปป์ไลน์"], ["customers", "ลูกค้า"], ["map", "แผนที่"], ["tasks", "งานติดตาม"], ["settings", "ตั้งค่า"]];
+function shell() {
+  $("#root").innerHTML = `<div class="app"><nav class="rail" aria-label="เมนูหลัก"><div class="brand"><i></i>Ikigai Sales</div>
+    ${NAV.filter(([k]) => k !== "settings" || isLead()).map(([k, n]) => `<a href="#${k}" data-v="${k}">${n}${k === "tasks" ? ' <span class="n" id="taskCount"></span>' : ""}</a>`).join("")}
+    <div class="me"><div><b>${esc(S.me.full_name)}</b><br>${isLead() ? "หัวหน้าทีม" : "เซลล์"}</div><button class="btn sm" id="logout">ออกจากระบบ</button></div>
+  </nav><main id="main"></main></div>`;
+  $("#logout").onclick = async () => { await sb.auth.signOut(); };
+}
+const VIEWS = { dashboard, pipeline, customers: customersView, map: mapView, tasks: tasksView, settings: settingsView };
+function route() {
+  if (!S.me) return;
+  let v = (location.hash || "#dashboard").slice(1);
+  if (!VIEWS[v] || (v === "settings" && !isLead())) v = "dashboard";
+  $$("nav.rail a").forEach(a => a.classList.toggle("on", a.dataset.v === v));
+  VIEWS[v]();
+  const n = S.tasks.filter(t => !t.done && t.due_date <= todayISO()).length;
+  const tc = $("#taskCount"); if (tc) tc.textContent = n || "";
+}
+window.addEventListener("hashchange", route);
+async function refresh() { await loadAll(); route(); }
+
+/* ===== dashboard ===== */
+function dashboard() {
+  const today = todayISO(), ym = today.slice(0, 7);
+  const cs = S.customers;
+  const wonMonth = cs.filter(c => c.stage === "won" && (c.closed_at || "").startsWith(ym));
+  const wonV = wonMonth.reduce((a, c) => a + Number(c.deal_value), 0);
+  const open = cs.filter(c => OPEN.includes(c.stage));
+  const pipeV = open.reduce((a, c) => a + Number(c.deal_value), 0);
+  const fc = open.reduce((a, c) => a + Number(c.deal_value) * st(c.stage).p, 0);
+  const wonAll = cs.filter(c => c.stage === "won").length, closed = cs.filter(c => ["won", "lost"].includes(c.stage)).length;
+  const target = Number(S.targets.find(t => t.month.startsWith(ym))?.amount || 0);
+
+  // last 6 months
+  const months = [];
+  const [y, m] = ym.split("-").map(Number);
+  for (let i = 5; i >= 0; i--) { const d = new Date(Date.UTC(y, m - 1 - i, 1)); const key = d.toISOString().slice(0, 7); months.push({ key, label: MONTHS[d.getUTCMonth()], v: cs.filter(c => c.stage === "won" && (c.closed_at || "").startsWith(key)).reduce((a, c) => a + Number(c.deal_value), 0), t: Number(S.targets.find(t => t.month.startsWith(key))?.amount || 0) }); }
+  const top = Math.max(1000, ...months.map(x => Math.max(x.v, x.t)));
+  const step = (() => { const raw = top / 3, mag = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 2.5, 5, 10].map(f => f * mag).find(s => s >= raw); })();
+  const ticks = Math.ceil(top / step), max = step * ticks;
+  const W = 560, H = 200, pad = 44, bw = (W - pad) / 6;
+  const fmtK = v => v >= 1e6 ? +(v / 1e6).toFixed(2) + "M" : v >= 1000 ? +(v / 1000).toFixed(1) + "k" : String(v);
+  let grid = "", bars = "";
+  for (let i = 0; i <= ticks; i++) { const v = step * i, yy = H - 20 - (v / max) * (H - 40); grid += `<line x1="${pad}" x2="${W}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${pad - 6}" y="${yy + 4}" text-anchor="end">${fmtK(v)}</text>`; }
+  months.forEach((mo, i) => {
+    const x = pad + i * bw + bw * .2, w = bw * .6, h = (mo.v / max) * (H - 40), yy = H - 20 - h;
+    bars += `<rect x="${x}" y="${yy}" width="${w}" height="${Math.max(h, 0)}" rx="3" fill="${i === 5 ? "var(--warm)" : "var(--accent)"}"><title>${mo.label}: ${baht(mo.v)}</title></rect>`;
+    if (mo.t) { const ty = H - 20 - (mo.t / max) * (H - 40); bars += `<line x1="${x - 4}" x2="${x + w + 4}" y1="${ty}" y2="${ty}" stroke="var(--fg)" stroke-width="2" stroke-dasharray="4 3"><title>เป้า ${baht(mo.t)}</title></line>`; }
+    bars += `<text x="${x + w / 2}" y="${H - 4}" text-anchor="middle">${mo.label}</text>`;
+  });
+  const funnel = STAGES.filter(s => s.k !== "lost").map(s => { const l = cs.filter(c => c.stage === s.k); return { s, n: l.length, v: l.reduce((a, c) => a + Number(c.deal_value), 0) }; });
+  const fmax = Math.max(1, ...funnel.map(f => f.v));
+  const dueTasks = S.tasks.filter(t => !t.done && t.due_date <= today);
+  const repRows = S.team.map(p => { const mine = cs.filter(c => c.owner_id === p.id); const o = mine.filter(c => OPEN.includes(c.stage)); const w = mine.filter(c => c.stage === "won" && (c.closed_at || "").startsWith(ym)).reduce((a, c) => a + Number(c.deal_value), 0); return `<tr><td>${rep(p.id)}</td><td class="num">${o.length}</td><td class="num">${baht(o.reduce((a, c) => a + Number(c.deal_value), 0))}</td><td class="num">${baht(w)}</td></tr>`; }).join("");
+  const monthName = new Date().toLocaleDateString("th-TH", { month: "long", year: "numeric", timeZone: "Asia/Bangkok" });
+
+  $("#main").innerHTML = `
+  <header class="top"><div><h1>ภาพรวมยอดขาย</h1><div class="sub">${monthName}${isLead() ? " · ทั้งทีม" : " · เฉพาะลูกค้าของคุณ"}</div></div><div class="sp"></div><button class="btn pri" onclick="openForm()">+ เพิ่มลูกค้า</button></header>
+  ${cs.length ? "" : `<div class="panel" style="margin-bottom:16px;background:var(--accent-soft);border-color:transparent">ยังไม่มีลูกค้าในระบบ กด "+ เพิ่มลูกค้า" ${isLead() ? 'หรือไปที่ <a class="link" href="#settings">ตั้งค่า</a> เพื่อนำเข้าจาก Google Sheet' : ""}</div>`}
+  <div class="kpis">
+    <div class="panel kpi"><div class="l">ยอดปิดได้เดือนนี้</div><div class="v">${baht(wonV)}</div><div class="d">${target ? `เป้า ${baht(target)} · ${Math.round(wonV / target * 100)}%` : isLead() ? '<a class="link" href="#settings">ตั้งเป้าเดือนนี้</a>' : "ยังไม่ได้ตั้งเป้า"}</div></div>
+    <div class="panel kpi"><div class="l">มูลค่าดีลที่กำลังเปิด</div><div class="v">${baht(pipeV)}</div><div class="d">${open.length} ดีล</div></div>
+    <div class="panel kpi"><div class="l">คาดการณ์ (ถ่วงตามโอกาสปิด)</div><div class="v">${baht(fc)}</div><div class="d">จากดีลที่เปิดอยู่</div></div>
+    <div class="panel kpi"><div class="l">อัตราปิดการขาย</div><div class="v">${closed ? Math.round(wonAll / closed * 100) + "%" : "-"}</div><div class="d">${wonAll} จาก ${closed} ดีลที่จบแล้ว</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><h2>ยอดขายรายเดือน</h2>
+      <div class="bar-legend"><span style="--c:var(--accent)">ยอดปิดได้</span><span style="--c:var(--warm)">เดือนนี้</span><span style="--c:var(--fg)">เป้า (เส้นประ)</span></div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="กราฟยอดขายรายเดือน">${grid}${bars}</svg></div>
+    <div class="panel funnel"><h2>ดีลในแต่ละขั้น</h2>
+      ${funnel.map(f => `<div class="row"><span>${f.s.n} <span class="sub">(${f.n})</span></span><div class="track"><div class="fill" style="width:${f.v / fmax * 100}%;background:${f.s.c}"></div></div><span class="amt">${baht(f.v)}</span></div>`).join("")}
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><h2>ต้องติดตามวันนี้และที่เลยกำหนด</h2>
+      ${dueTasks.map(t => { const c = cust(t.customer_id); return c ? `<div class="task"><div style="min-width:0"><div class="tt">${esc(t.title)}</div><div class="tm"><a class="link" href="javascript:openDetail(${c.id})">${esc(c.name)}</a>${c.phone ? " · " + esc(c.phone) : ""}</div></div><div class="when">${due(t.due_date)}</div></div>` : ""; }).join("") || "<p class='empty'>ไม่มีงานค้าง</p>"}
+    </div>
+    <div class="panel"><h2>ผลงานรายคน (เดือนนี้)</h2><div class="tbl-wrap"><table><thead><tr><th>เซลล์</th><th class="num">ดีลเปิด</th><th class="num">มูลค่า</th><th class="num">ปิดได้</th></tr></thead><tbody>${repRows}</tbody></table></div></div>
+  </div>`;
+}
+
+/* ===== pipeline ===== */
+function pipeline() {
+  const cols = STAGES.filter(s => s.k !== "lost");
+  $("#main").innerHTML = `<header class="top"><div><h1>ไปป์ไลน์การขาย</h1><div class="sub">ลากการ์ดเพื่อเปลี่ยนขั้น หรือกดการ์ดเพื่อดูและแก้ไข</div></div><div class="sp"></div><button class="btn pri" onclick="openForm()">+ เพิ่มดีล</button></header>
+  <div class="board">${cols.map(s => { const cs = S.customers.filter(c => c.stage === s.k); return `<div class="col" data-k="${s.k}" style="--c:${s.c}"><h3>${s.n} <span class="sub" style="font-weight:400">${cs.length}</span></h3><div class="sum">${baht(cs.reduce((a, c) => a + Number(c.deal_value), 0))}</div>
+   ${cs.map(c => { const nt = nextTask(c.id); return `<div class="card" draggable="true" data-id="${c.id}" tabindex="0"><div class="t">${esc(c.name)}</div><div class="m"><span class="val">${baht(c.deal_value)}</span>${rep(c.owner_id)}</div>${nt ? `<div class="due">ติดตาม: ${due(nt.due_date)}</div>` : ""}</div>`; }).join("")}</div>`; }).join("")}</div>`;
+  $$(".card").forEach(el => {
+    el.addEventListener("dragstart", e => e.dataTransfer.setData("text/plain", el.dataset.id));
+    el.addEventListener("click", () => openDetail(+el.dataset.id));
+    el.addEventListener("keydown", e => { if (e.key === "Enter") openDetail(+el.dataset.id); });
+  });
+  $$(".col").forEach(col => {
+    col.addEventListener("dragover", e => { e.preventDefault(); col.classList.add("over"); });
+    col.addEventListener("dragleave", () => col.classList.remove("over"));
+    col.addEventListener("drop", async e => { e.preventDefault(); col.classList.remove("over"); const c = cust(+e.dataTransfer.getData("text/plain")); if (c && c.stage !== col.dataset.k) await setStage(c.id, col.dataset.k); });
+  });
+}
+async function setStage(id, stage) {
+  let lost_reason;
+  if (stage === "lost") { lost_reason = prompt("เหตุผลที่ไม่สำเร็จ (ไม่บังคับ)") ; if (lost_reason === null) return route(); }
+  const patch = { stage }; if (lost_reason !== undefined) patch.lost_reason = lost_reason || null;
+  const { error } = await sb.from("customers").update(patch).eq("id", id);
+  if (fail(error)) return;
+  const c = cust(id); toast(`ย้าย ${c?.name || ""} ไป "${st(stage).n}"`);
+  await sb.from("activities").insert({ customer_id: id, body: `เปลี่ยนสถานะเป็น "${st(stage).n}"${lost_reason ? " เหตุผล: " + lost_reason : ""}` });
+  await refresh();
+}
+
+/* ===== customers ===== */
+function customersView() {
+  const f = S.filt;
+  $("#main").innerHTML = `<header class="top"><div><h1>รายชื่อลูกค้า</h1><div class="sub" id="ccount"></div></div><div class="sp"></div><button class="btn" onclick="exportCSV()">ส่งออก CSV</button><button class="btn pri" onclick="openForm()">+ เพิ่มลูกค้า</button></header>
+  <div class="filters"><input id="fq" placeholder="ค้นหาชื่อ ผู้ติดต่อ เบอร์โทร" value="${esc(f.q)}">
+  <select id="fs"><option value="">ทุกสถานะ</option>${STAGES.map(s => `<option value="${s.k}" ${f.stage === s.k ? "selected" : ""}>${s.n}</option>`).join("")}</select>
+  ${isLead() ? `<select id="fo"><option value="">ทุกคน</option>${S.team.map(p => `<option value="${p.id}" ${f.owner === p.id ? "selected" : ""}>${esc(p.full_name)}</option>`).join("")}</select>` : ""}</div>
+  <div class="panel tbl-wrap" style="padding:4px 12px"><table><thead><tr><th>ลูกค้า</th><th class="hide-sm">ผู้ติดต่อ</th><th>สถานะ</th><th class="num">มูลค่า</th><th class="hide-sm">ผู้ดูแล</th><th class="hide-sm">ติดตามครั้งถัดไป</th></tr></thead><tbody id="rows"></tbody></table></div>`;
+  const draw = () => {
+    const q = f.q.toLowerCase();
+    const list = filtered();
+    $("#ccount").textContent = `${list.length} จาก ${S.customers.length} ราย`;
+    $("#rows").innerHTML = list.map(c => { const nt = nextTask(c.id); return `<tr class="click" data-id="${c.id}"><td><b>${esc(c.name)}</b><div class="sub" style="font-size:12px">${esc(c.address)}</div></td><td class="hide-sm">${esc(c.contact_name)}<div class="sub" style="font-size:12px">${esc(c.phone)}</div></td><td>${pill(c.stage)}</td><td class="num">${baht(c.deal_value)}</td><td class="hide-sm">${rep(c.owner_id)}</td><td class="hide-sm">${nt ? esc(nt.title) + " · " + due(nt.due_date) : "-"}</td></tr>`; }).join("") || `<tr><td colspan="6" class="empty">${S.customers.length ? "ไม่พบลูกค้าที่ตรงกับตัวกรอง" : "ยังไม่มีลูกค้า"}</td></tr>`;
+    $$("tr.click").forEach(r => r.onclick = () => openDetail(+r.dataset.id));
+  };
+  $("#fq").oninput = e => { f.q = e.target.value; draw(); };
+  $("#fs").onchange = e => { f.stage = e.target.value; draw(); };
+  if ($("#fo")) $("#fo").onchange = e => { f.owner = e.target.value; draw(); };
+  draw();
+}
+function filtered() {
+  const f = S.filt, q = f.q.toLowerCase();
+  return S.customers.filter(c => (!f.stage || c.stage === f.stage) && (!f.owner || c.owner_id === f.owner) && (!q || [c.name, c.contact_name, c.phone, c.line_id, c.address].join(" ").toLowerCase().includes(q)));
+}
+function exportCSV() {
+  const rows = filtered().map(c => ({ "ชื่อร้าน/บริษัท": c.name, "ผู้ติดต่อ": c.contact_name || "", "เบอร์โทร": c.phone || "", "LINE": c.line_id || "", "อีเมล": c.email || "", "ที่อยู่": c.address || "", "พิกัด": c.lat ? `${c.lat}, ${c.lng}` : "", "สถานะ": st(c.stage).n, "มูลค่า": c.deal_value, "ที่มา": c.source || "", "ผู้ดูแล": person(c.owner_id)?.full_name || "", "วันที่ปิด": c.closed_at || "" }));
+  const blob = new Blob(["﻿" + Papa.unparse(rows)], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `ลูกค้า-${todayISO()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ===== detail drawer ===== */
+function closeLayer() { $("#layer").innerHTML = ""; }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeLayer(); });
+async function openDetail(id) {
+  const c = cust(id); if (!c) return;
+  const { data: acts, error } = await sb.from("activities").select("*").eq("customer_id", id).order("created_at", { ascending: false });
+  fail(error);
+  const tasks = S.tasks.filter(t => t.customer_id === id).sort((a, b) => a.done - b.done || a.due_date.localeCompare(b.due_date));
+  const loc = c.lat != null && c.lng != null;
+  $("#layer").innerHTML = `<div class="drawer-bg" onclick="closeLayer()"></div><aside class="drawer" role="dialog" aria-label="${esc(c.name)}">
+  <div style="display:flex;align-items:start;gap:10px"><div style="flex:1;min-width:0"><h2>${esc(c.name)}</h2><div style="margin-top:6px">${pill(c.stage)}</div></div><button class="btn" onclick="openForm(${c.id})">แก้ไข</button><button class="btn" onclick="closeLayer()" aria-label="ปิด">✕</button></div>
+  <dl class="kv"><dt>มูลค่าดีล</dt><dd class="num" style="text-align:left">${baht(c.deal_value)}</dd>
+  ${c.contact_name ? `<dt>ผู้ติดต่อ</dt><dd>${esc(c.contact_name)}</dd>` : ""}
+  ${c.phone ? `<dt>โทร</dt><dd><a class="link" href="tel:${esc(c.phone.replace(/[^\d+]/g, ""))}">${esc(c.phone)}</a> <button class="copy" onclick="cp(${esc(JSON.stringify(c.phone))})">คัดลอก</button></dd>` : ""}
+  ${c.line_id ? `<dt>LINE</dt><dd>${esc(c.line_id)} <button class="copy" onclick="cp(${esc(JSON.stringify(c.line_id))})">คัดลอก</button></dd>` : ""}
+  ${c.email ? `<dt>อีเมล</dt><dd><a class="link" href="mailto:${esc(c.email)}">${esc(c.email)}</a></dd>` : ""}
+  <dt>ที่อยู่</dt><dd>${esc(c.address) || "-"}${loc ? `<br><a class="link" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">นำทางใน Google Maps</a>` : ""}</dd>
+  ${c.source ? `<dt>ที่มา</dt><dd>${esc(c.source)}</dd>` : ""}<dt>ผู้ดูแล</dt><dd>${rep(c.owner_id)}</dd>
+  ${c.closed_at ? `<dt>วันที่ปิด</dt><dd>${thaiDate(c.closed_at)}</dd>` : ""}
+  ${c.lost_reason ? `<dt>เหตุผลที่ไม่สำเร็จ</dt><dd>${esc(c.lost_reason)}</dd>` : ""}</dl>
+  <label class="form"><span>เปลี่ยนสถานะ</span><select id="stSel">${STAGES.map(s => `<option value="${s.k}" ${s.k === c.stage ? "selected" : ""}>${s.n}</option>`).join("")}</select></label>
+  <h3>งานติดตาม</h3>
+  ${tasks.map(t => `<div class="task ${t.done ? "done" : ""}"><input type="checkbox" data-tid="${t.id}" ${t.done ? "checked" : ""} aria-label="ทำเสร็จแล้ว"><div style="min-width:0"><div class="tt">${esc(t.title)}</div><div class="tm">${rep(t.assignee_id)}</div></div><div class="when">${t.done ? "เสร็จแล้ว" : due(t.due_date)}</div></div>`).join("") || "<p class='empty' style='padding:0 0 8px'>ยังไม่มีงานติดตาม</p>"}
+  <form class="form" id="tf" style="grid-template-columns:1fr auto auto;align-items:end;margin-top:8px"><input id="t_title" placeholder="เช่น โทรตามใบเสนอราคา" required><input id="t_due" type="date" value="${todayISO()}" required><button class="btn">เพิ่ม</button></form>
+  <h3>บันทึกการติดต่อ</h3>
+  <form class="form" id="af" style="margin-bottom:14px"><textarea id="a_body" rows="2" placeholder="เช่น โทรคุยแล้ว ลูกค้าขอส่วนลด 5%" required></textarea><div><button class="btn">บันทึก</button></div></form>
+  <div class="timeline">${(acts || []).map(a => `<div class="ev">${esc(a.body)}<small>${thaiDateTime(a.created_at)}${person(a.author_id) ? " · " + esc(person(a.author_id).full_name) : ""}</small></div>`).join("")}<div class="ev">สร้างข้อมูลลูกค้า<small>${thaiDateTime(c.created_at)}</small></div></div>
+  ${isLead() ? `<div style="margin-top:24px"><button class="btn danger" id="delBtn">ลบลูกค้ารายนี้</button></div>` : ""}
+  </aside>`;
+  $("#stSel").onchange = async e => { await setStage(id, e.target.value); openDetail(id); };
+  $$("[data-tid]").forEach(i => i.onchange = async () => { const { error } = await sb.from("tasks").update({ done: i.checked }).eq("id", +i.dataset.tid); if (fail(error)) return; if (i.checked) toast("บันทึกว่าเสร็จแล้ว"); await refresh(); openDetail(id); });
+  $("#tf").onsubmit = async e => { e.preventDefault(); const { error } = await sb.from("tasks").insert({ customer_id: id, title: val("t_title"), due_date: val("t_due"), assignee_id: c.owner_id || S.me.id }); if (fail(error)) return; toast("เพิ่มงานแล้ว"); await refresh(); openDetail(id); };
+  $("#af").onsubmit = async e => { e.preventDefault(); const { error } = await sb.from("activities").insert({ customer_id: id, body: val("a_body") }); if (fail(error)) return; await sb.from("customers").update({ updated_at: new Date().toISOString() }).eq("id", id); toast("บันทึกแล้ว"); openDetail(id); };
+  if ($("#delBtn")) $("#delBtn").onclick = async () => { if (!confirm(`ลบ "${c.name}" พร้อมบันทึกและงานทั้งหมด? ย้อนกลับไม่ได้`)) return; const { error } = await sb.from("customers").delete().eq("id", id); if (fail(error)) return; closeLayer(); toast("ลบแล้ว"); await refresh(); };
+}
+function cp(t) { try { navigator.clipboard.writeText(t).then(() => toast("คัดลอกแล้ว"), () => toast(t)); } catch { toast(t); } }
+
+/* ===== add / edit form ===== */
+function openForm(id) {
+  const c = id ? cust(id) : null, isNew = !c;
+  const ownerOpts = S.team.map(p => `<option value="${p.id}" ${(c ? c.owner_id : S.me.id) === p.id ? "selected" : ""}>${esc(p.full_name)}</option>`).join("");
+  $("#layer").innerHTML = `<div class="drawer-bg" onclick="closeLayer()"></div><aside class="drawer" role="dialog" aria-label="${isNew ? "เพิ่มลูกค้า" : "แก้ไขลูกค้า"}"><div style="display:flex;align-items:center"><h2 style="flex:1">${isNew ? "เพิ่มลูกค้าใหม่" : "แก้ไขข้อมูลลูกค้า"}</h2><button class="btn" onclick="closeLayer()" aria-label="ปิด">✕</button></div>
+  <form class="form" id="nf" style="margin-top:16px">
+   <label>ชื่อร้าน / บริษัท *<input id="f_name" required value="${esc(c?.name)}"></label>
+   <div class="row2"><label>ผู้ติดต่อ<input id="f_contact" value="${esc(c?.contact_name)}"></label><label>เบอร์โทร<input id="f_phone" type="tel" value="${esc(c?.phone)}"></label></div>
+   <div class="row2"><label>LINE ID<input id="f_line" value="${esc(c?.line_id)}"></label><label>อีเมล<input id="f_email" type="email" value="${esc(c?.email)}"></label></div>
+   <label>ที่อยู่<input id="f_addr" value="${esc(c?.address)}"></label>
+   <div class="row2"><label>พิกัด (lat, lng)<input id="f_loc" placeholder="13.7563, 100.5018" value="${c?.lat != null ? c.lat + ", " + c.lng : ""}"></label><label>&nbsp;<button type="button" class="btn" id="f_gps">ใช้ตำแหน่งปัจจุบัน</button></label></div>
+   <div class="row2"><label>มูลค่าดีล (บาท)<input id="f_value" inputmode="decimal" value="${c ? Number(c.deal_value) : ""}"></label><label>สถานะ<select id="f_stage">${STAGES.map(s => `<option value="${s.k}" ${(c?.stage || "lead") === s.k ? "selected" : ""}>${s.n}</option>`).join("")}</select></label></div>
+   <div class="row2"><label>ที่มา<input id="f_source" placeholder="Facebook, แนะนำต่อ, Walk-in" value="${esc(c?.source)}"></label>
+   ${isLead() ? `<label>ผู้ดูแล<select id="f_owner">${ownerOpts}</select></label>` : "<span></span>"}</div>
+   ${isNew ? `<div class="row2"><label>นัดติดตามครั้งถัดไป<input id="f_task" placeholder="เช่น โทรแนะนำสินค้า"></label><label>วันที่<input id="f_due" type="date" value="${todayISO()}"></label></div>` : ""}
+   <div class="err-msg" id="f_err"></div>
+   <button class="btn pri" type="submit" id="f_btn">บันทึก</button></form></aside>`;
+  setTimeout(() => $("#f_name").focus(), 50);
+  $("#f_gps").onclick = () => {
+    if (!navigator.geolocation) return toast("เครื่องนี้ไม่รองรับการหาตำแหน่ง", true);
+    $("#f_gps").textContent = "กำลังหาตำแหน่ง…";
+    navigator.geolocation.getCurrentPosition(p => { $("#f_loc").value = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`; $("#f_gps").textContent = "ใช้ตำแหน่งปัจจุบัน"; },
+      e => { toast("หาตำแหน่งไม่ได้: " + e.message, true); $("#f_gps").textContent = "ใช้ตำแหน่งปัจจุบัน"; }, { enableHighAccuracy: true, timeout: 15000 });
+  };
+  $("#nf").onsubmit = async e => {
+    e.preventDefault();
+    const loc = val("f_loc").match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+    if (val("f_loc") && !loc) { $("#f_err").textContent = "พิกัดต้องอยู่ในรูป 13.7563, 100.5018"; return; }
+    const row = {
+      name: val("f_name"), contact_name: val("f_contact") || null, phone: val("f_phone") || null, line_id: val("f_line") || null,
+      email: val("f_email") || null, address: val("f_addr") || null, lat: loc ? +loc[1] : null, lng: loc ? +loc[2] : null,
+      deal_value: Number(val("f_value").replace(/[^\d.]/g, "")) || 0, stage: val("f_stage"), source: val("f_source") || null,
+    };
+    if (isLead()) row.owner_id = val("f_owner") || S.me.id; else if (isNew) row.owner_id = S.me.id;
+    $("#f_btn").disabled = true;
+    let res;
+    if (isNew) res = await sb.from("customers").insert(row).select("id").single();
+    else res = await sb.from("customers").update(row).eq("id", c.id).select("id").single();
+    if (res.error) { $("#f_btn").disabled = false; $("#f_err").textContent = res.error.message; return; }
+    const newId = res.data.id;
+    if (isNew && val("f_task")) await sb.from("tasks").insert({ customer_id: newId, title: val("f_task"), due_date: val("f_due") || todayISO(), assignee_id: row.owner_id });
+    toast(isNew ? "เพิ่มลูกค้าแล้ว" : "บันทึกแล้ว");
+    await refresh(); openDetail(newId);
+  };
+}
+
+/* ===== map ===== */
+let leafMap;
+function mapView() {
+  const withLoc = S.customers.filter(c => c.lat != null && c.lng != null);
+  $("#main").innerHTML = `<header class="top"><div><h1>แผนที่ลูกค้า</h1><div class="sub">สีบอกสถานะ · ปักหมุดได้ ${withLoc.length} จาก ${S.customers.length} ราย (เพิ่มพิกัดได้ในหน้าแก้ไขลูกค้า)</div></div></header>
+  <div class="mapwrap"><div id="leaf"></div>
+  <div class="panel" id="mapside"><h2>วางแผนเส้นทางเยี่ยมลูกค้า</h2><p class="sub" style="margin-top:0">กดหมุดบนแผนที่เพื่อดูข้อมูลลูกค้าและนำทาง</p>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">${STAGES.map(s => `<span class="pill" style="--c:${s.c}">${s.n}</span>`).join("")}</div></div></div>`;
+  if (leafMap) { leafMap.remove(); leafMap = null; }
+  leafMap = L.map("leaf").setView([13.7563, 100.5018], 10);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(leafMap);
+  const css = getComputedStyle(document.documentElement);
+  const color = k => { const v = st(k).c.match(/var\((--[\w-]+)\)/); return v ? css.getPropertyValue(v[1]).trim() : st(k).c; };
+  const pts = [];
+  withLoc.forEach(c => {
+    const r = 7 + Math.min(10, Math.sqrt(Number(c.deal_value) / 1000) * .5);
+    const m = L.circleMarker([c.lat, c.lng], { radius: r, color: "#fff", weight: 2, fillColor: color(c.stage), fillOpacity: .9 }).addTo(leafMap);
+    m.bindTooltip(c.name);
+    m.on("click", () => side(c));
+    pts.push([c.lat, c.lng]);
+  });
+  if (pts.length) leafMap.fitBounds(pts, { padding: [30, 30], maxZoom: 14 });
+  function side(c) {
+    const nt = nextTask(c.id);
+    $("#mapside").innerHTML = `<h2>${esc(c.name)}</h2>${pill(c.stage)}<dl class="kv"><dt>ผู้ติดต่อ</dt><dd>${esc(c.contact_name) || "-"}</dd><dt>โทร</dt><dd>${c.phone ? `<a class="link" href="tel:${esc(c.phone.replace(/[^\d+]/g, ""))}">${esc(c.phone)}</a>` : "-"}</dd><dt>ที่อยู่</dt><dd>${esc(c.address) || "-"}</dd><dt>มูลค่า</dt><dd>${baht(c.deal_value)}</dd><dt>ติดตาม</dt><dd>${nt ? esc(nt.title) + " · " + due(nt.due_date) : "-"}</dd></dl>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">นำทางใน Google Maps</a><button class="btn" onclick="openDetail(${c.id})">ดูรายละเอียด</button></div>`;
+  }
+}
+
+/* ===== tasks ===== */
+let showDone = false;
+function tasksView() {
+  const list = S.tasks.filter(t => showDone || !t.done).sort((a, b) => a.done - b.done || a.due_date.localeCompare(b.due_date));
+  $("#main").innerHTML = `<header class="top"><div><h1>งานติดตามลูกค้า</h1><div class="sub">${S.tasks.filter(t => !t.done).length} งานที่ยังไม่เสร็จ</div></div><div class="sp"></div><label class="chk sub"><input type="checkbox" id="sd" ${showDone ? "checked" : ""}> แสดงงานที่เสร็จแล้ว</label></header>
+  <div class="panel">${list.map(t => { const c = cust(t.customer_id); if (!c) return ""; return `<div class="task ${t.done ? "done" : ""}"><input type="checkbox" data-id="${t.id}" ${t.done ? "checked" : ""} aria-label="ทำเสร็จแล้ว"><div style="min-width:0"><div class="tt">${esc(t.title)}</div><div class="tm"><a class="link" href="javascript:openDetail(${c.id})">${esc(c.name)}</a>${c.contact_name ? " · " + esc(c.contact_name) : ""}${c.phone ? " · " + esc(c.phone) : ""}${isLead() && person(t.assignee_id) ? " · " + esc(person(t.assignee_id).full_name) : ""}</div></div><div class="when">${t.done ? "เสร็จแล้ว" : due(t.due_date)}</div></div>`; }).join("") || "<p class='empty'>ไม่มีงานติดตาม เพิ่มได้ในหน้ารายละเอียดลูกค้า</p>"}</div>`;
+  $("#sd").onchange = e => { showDone = e.target.checked; tasksView(); };
+  $$(".task input[data-id]").forEach(i => i.onchange = async () => { const { error } = await sb.from("tasks").update({ done: i.checked }).eq("id", +i.dataset.id); if (fail(error)) return; if (i.checked) toast("บันทึกว่าเสร็จแล้ว"); await refresh(); });
+}
+
+/* ===== settings (lead only) ===== */
+function settingsView() {
+  $("#main").innerHTML = `<header class="top"><h1>ตั้งค่า</h1></header>
+  <div class="stack"><div class="grid2" style="margin-bottom:0">
+    <div class="panel"><h2>เป้ายอดขายรายเดือนของทีม</h2>
+      <form class="form" id="gf"><div class="row2"><label>เดือน<input id="g_month" type="month" required value="${todayISO().slice(0, 7)}"></label><label>เป้า (บาท)<input id="g_amt" inputmode="decimal" required></label></div><div><button class="btn pri">บันทึกเป้า</button></div></form>
+      <table style="margin-top:12px"><tbody>${S.targets.slice(0, 6).map(t => `<tr><td>${MONTHS[+t.month.slice(5, 7) - 1]} ${+t.month.slice(0, 4) + 543}</td><td class="num">${baht(t.amount)}</td></tr>`).join("")}</tbody></table></div>
+    <div class="panel"><h2>สมาชิกทีม</h2>
+      <p class="sub" style="margin-top:0">เพิ่มคนใหม่ที่ Supabase → Authentication → Users → Add user แล้วกลับมาตั้งชื่อและบทบาทที่นี่</p>
+      <table><tbody>${S.team.map(p => `<tr><td><input class="inp" style="border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:6px 8px;width:100%" data-name="${p.id}" value="${esc(p.full_name)}"></td><td style="width:130px"><select class="inp" data-role="${p.id}" ${p.id === S.me.id ? "disabled" : ""}><option value="sales" ${p.role === "sales" ? "selected" : ""}>เซลล์</option><option value="lead" ${p.role === "lead" ? "selected" : ""}>หัวหน้าทีม</option></select></td></tr>`).join("")}</tbody></table></div>
+  </div>
+  <div class="panel"><h2>นำเข้าลูกค้าจาก Google Sheet</h2><div id="imp"></div></div></div>`;
+  $("#gf").onsubmit = async e => { e.preventDefault(); const amount = Number(val("g_amt").replace(/[^\d.]/g, "")); if (!amount) return; const { error } = await sb.from("targets").upsert({ month: val("g_month") + "-01", amount }); if (fail(error)) return; toast("บันทึกเป้าแล้ว"); await refresh(); };
+  $$("[data-role]").forEach(s => s.onchange = async () => { const { error } = await sb.from("profiles").update({ role: s.value }).eq("id", s.dataset.role); if (fail(error)) return; toast("เปลี่ยนบทบาทแล้ว"); await refresh(); });
+  $$("[data-name]").forEach(i => i.onchange = async () => { const { error } = await sb.from("profiles").update({ full_name: i.value.trim() }).eq("id", i.dataset.name); if (fail(error)) return; toast("บันทึกชื่อแล้ว"); await loadAll(); });
+  importer($("#imp"));
+}
+
+/* ===== importer ===== */
+const FIELDS = [
+  ["name", "ชื่อร้าน / บริษัท *", /ชื่อร้าน|บริษัท|ลูกค้า|customer|company|name/i],
+  ["contact_name", "ผู้ติดต่อ", /ผู้ติดต่อ|contact|คุณ/i],
+  ["phone", "เบอร์โทร", /เบอร์|โทร|phone|tel|mobile/i],
+  ["line_id", "LINE ID", /line|ไลน์/i],
+  ["email", "อีเมล", /อีเมล|e-?mail/i],
+  ["address", "ที่อยู่", /ที่อยู่|address|ที่ตั้ง/i],
+  ["lat", "ละติจูด หรือ พิกัด \"lat, lng\"", /lat|ละติจูด|พิกัด|location|โลเคชั่น/i],
+  ["lng", "ลองจิจูด", /lng|lon|ลองจิจูด/i],
+  ["stage", "สถานะ", /สถานะ|status|stage/i],
+  ["deal_value", "มูลค่า / ยอดขาย", /มูลค่า|ยอด|ราคา|value|amount|price/i],
+  ["source", "ที่มา", /ที่มา|source|ช่องทาง/i],
+  ["owner", "เซลล์ผู้ดูแล (ชื่อ)", /เซล|ผู้ดูแล|owner|sales|rep/i],
+];
+function toStage(v) {
+  const s = v.trim().toLowerCase(), hit = STAGES.find(x => x.k === s || x.n === v.trim());
+  if (hit) return hit.k;
+  if (/ปิด|won|สำเร็จแล้ว|ซื้อแล้ว/.test(s)) return "won";
+  if (/ไม่|lost|ยกเลิก/.test(s)) return "lost";
+  if (/ต่อรอง|nego/.test(s)) return "nego";
+  if (/เสนอ|quote/.test(s)) return "quote";
+  if (/ติดต่อ|contact|คุย/.test(s)) return "contact";
+  return "lead";
+}
+function importer(box) {
+  let headers = [], data = [], map = {};
+  box.innerHTML = `<div class="form"><p class="sub" style="margin:0">ใน Google Sheet ไปที่ ไฟล์ → ดาวน์โหลด → CSV แล้วเลือกไฟล์ที่นี่ หรือคัดลอกทั้งตาราง (รวมหัวคอลัมน์) มาวางในช่องด้านล่าง</p>
+    <input type="file" id="csv-file" accept=".csv,text/csv"><textarea id="csv-paste" rows="3" placeholder="หรือวางข้อมูลจาก Google Sheet ที่นี่"></textarea><div class="sub" id="imsg"></div><div id="imap"></div></div>`;
+  const load = text => {
+    const res = Papa.parse(text.trim(), { header: true, skipEmptyLines: true });
+    headers = res.meta.fields || []; data = res.data; map = {};
+    const used = new Set();
+    for (const [k, , re] of FIELDS) { const h = headers.find(h => !used.has(h) && re.test(h)); if (h) { map[k] = h; used.add(h); } }
+    $("#imsg").textContent = `อ่านได้ ${data.length} แถว ตรวจการจับคู่คอลัมน์ด้านล่างแล้วกดนำเข้า`;
+    draw();
+  };
+  const rows = () => {
+    const get = (r, k) => map[k] ? String(r[map[k]] ?? "").trim() : "";
+    return data.map(r => {
+      let lat = null, lng = null; const lr = get(r, "lat"), pair = lr.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+      if (pair) { lat = +pair[1]; lng = +pair[2]; } else { if (lr) lat = Number(lr) || null; if (get(r, "lng")) lng = Number(get(r, "lng")) || null; }
+      if (lat == null || lng == null) { lat = null; lng = null; }
+      const on = get(r, "owner"), owner = on ? S.team.find(p => p.full_name && (p.full_name.includes(on) || on.includes(p.full_name))) : null;
+      const v = Number(get(r, "deal_value").replace(/[^\d.]/g, ""));
+      return { name: get(r, "name"), contact_name: get(r, "contact_name") || null, phone: get(r, "phone") || null, line_id: get(r, "line_id") || null, email: get(r, "email") || null, address: get(r, "address") || null, lat, lng, stage: get(r, "stage") ? toStage(get(r, "stage")) : "lead", deal_value: Number.isFinite(v) ? v : 0, source: get(r, "source") || null, owner_id: owner?.id || S.me.id };
+    }).filter(r => r.name);
+  };
+  const draw = () => {
+    if (!headers.length) { $("#imap").innerHTML = ""; return; }
+    const rs = rows();
+    $("#imap").innerHTML = `<div class="row2">${FIELDS.map(([k, l]) => `<label>${l}<select data-map="${k}"><option value="">ไม่นำเข้า</option>${headers.map(h => `<option ${map[k] === h ? "selected" : ""}>${esc(h)}</option>`).join("")}</select></label>`).join("")}</div>
+    <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>ชื่อ</th><th>ผู้ติดต่อ</th><th>เบอร์</th><th>สถานะ</th><th class="num">มูลค่า</th><th>พิกัด</th><th>ผู้ดูแล</th></tr></thead><tbody>
+    ${rs.slice(0, 5).map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.contact_name)}</td><td>${esc(r.phone)}</td><td>${st(r.stage).n}</td><td class="num">${baht(r.deal_value)}</td><td>${r.lat != null ? r.lat.toFixed(4) + ", " + r.lng.toFixed(4) : "-"}</td><td>${esc(person(r.owner_id)?.full_name)}</td></tr>`).join("")}</tbody></table></div>
+    <div style="margin-top:10px"><button class="btn pri" id="impBtn" ${map.name ? "" : "disabled"}>นำเข้า ${rs.length} ราย</button></div>`;
+    $$("[data-map]").forEach(s => s.onchange = () => { map[s.dataset.map] = s.value; draw(); });
+    $("#impBtn").onclick = async () => {
+      const all = rows(); $("#impBtn").disabled = true; let done = 0;
+      for (let i = 0; i < all.length; i += 200) {
+        $("#impBtn").textContent = `กำลังนำเข้า ${done}/${all.length}…`;
+        const { error } = await sb.from("customers").insert(all.slice(i, i + 200));
+        if (error) { $("#imsg").textContent = `นำเข้าได้ ${done} ราย แล้วเกิดข้อผิดพลาด: ${error.message}`; await refresh(); return; }
+        done += Math.min(200, all.length - i);
+      }
+      toast(`นำเข้าสำเร็จ ${done} ราย`); await refresh();
+    };
+  };
+  $("#csv-file").onchange = async e => { const f = e.target.files?.[0]; if (f) load(await f.text()); };
+  $("#csv-paste").onpaste = e => { const t = e.clipboardData.getData("text"); if (t) { e.preventDefault(); load(t.includes("\t") ? Papa.unparse(Papa.parse(t.trim(), { delimiter: "\t" }).data) : t); } };
+}
+
+/* ===== boot ===== */
+async function onSession(session) {
+  if (!session) { S.user = S.me = null; if (leafMap) { leafMap.remove(); leafMap = null; } closeLayer(); loginView(); return; }
+  if (S.user?.id === session.user.id && S.me) return;
+  S.user = session.user;
+  $("#root").innerHTML = `<div class="loading">กำลังโหลดข้อมูล…</div>`;
+  await loadAll(); shell(); route();
+}
+async function boot() {
+  if (/type=recovery/.test(location.hash)) {
+    sb.auth.onAuthStateChange(ev => { if (ev === "PASSWORD_RECOVERY") resetPasswordView(); });
+    return;
+  }
+  sb.auth.onAuthStateChange((ev, session) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT" || ev === "INITIAL_SESSION") setTimeout(() => onSession(session), 0); });
+}
+boot();
+</script>
+</body>
+</html>
